@@ -23,7 +23,7 @@ typedef struct {
 volatile unsigned long millis = 0;
 
 /** The sensor stuff */
-#define MAXSENSORS 2
+#define MAXSENSORS 8
 uint8_t gSensorIDs[MAXSENSORS][OW_ROMCODE_SIZE];
 
 // Statics
@@ -189,17 +189,19 @@ int main(void) {
       } else {
 	myPutStr(" external\r\n");
       }
+
+      // Enable 12 bit mode (won't do anything on DS18S20)
+      DS18X20_write_scratchpad(&gSensorIDs[i][0], 0, 0, DS18B20_12_BIT);
+      DS18X20_scratchpad_to_eeprom(DS18X20_get_power_status( &gSensorIDs[i][0] ),&gSensorIDs[i][0]);
 	
     }
       
 
   }
   while(1) {
-    // unsigned long now = getMillis();
     unsigned long wakepoint;
-    //unsigned long tmp;
-    // char radiobuf[33];
     myRadioBuf_t radiobuf;
+    //char debugbuf[10];
 
     // if ((signed long)now - (signed long)nextflash >= 0) {
     //   debugLedToggle(0);
@@ -224,30 +226,23 @@ int main(void) {
       // Power the radio up
       PORTA |= _BV(PINA1);
       // Wakepoint set to now +100ms to allow radio to wake
+      wakepoint = getMillis() + 100;
 
-      //radioPrintDetails();
       for ( i = 0; i < numSensors; i++ ) {
         radiobuf.tenthousandths = -9999999L;
-	uint8_t j;
 	if (DS18X20_read_maxres( &gSensorIDs[i][0], &(radiobuf.tenthousandths) ) != DS18X20_OK) {
 	  radiobuf.tenthousandths = -9999999L;
-	} // else {
-	  // DS18X20_format_from_maxres(maxresdata , radiobuf.tempstr, 12 );
-	  // myPutStr("Sensor ");
-	  // for (j=0;j<OW_ROMCODE_SIZE;j++) {
-	    // myPutUint8(gSensorIDs[i][j]);
-	  // }
-	  // myPutStr(" = ");
-	  // myPutStr(radiobuf.tempstr);
-	  // myPutStr("\r\n");
-	// }
-        //sprintf(radiobuf, "Sensor %02x%02x%02x%02x%02x%02x%02x%02x = %s",
-	//  gSensorIDs[i][0], gSensorIDs[i][1], gSensorIDs[i][2], gSensorIDs[i][3], gSensorIDs[i][4],
-	//  gSensorIDs[i][5], gSensorIDs[i][6], gSensorIDs[i][7], s);
-        //  radioWrite(radiobuf,32);
+	}
+
+	//myPutStr("Sensor ");
+	uint8_t j;
 	for (j=0;j<OW_ROMCODE_SIZE;j++) {
             radiobuf.sensid[j] = gSensorIDs[i][j];
+	    //myPutUint8(gSensorIDs[i][j]);
         }
+	//myPutStr(" = ");
+	//sprintf(debugbuf, "%d.%d\r\n", (int)(radiobuf.tenthousandths/10000), (int)(radiobuf.tenthousandths % 10000));
+	//myPutStr(debugbuf);
         if (0 == i) {
 	  // First time around, radio not initialized
 	  while (! ((signed long)getMillis() - (signed long)wakepoint >= 0)) {
@@ -260,7 +255,11 @@ int main(void) {
 	  radioOpenWritingPipe(pipe);
         }
 	radiobuf.tstamp = getMillis();
+	//myPutStr("about to radioWrite, i=");
+	//myPutUint8(i);
+	//myPutStr("...");
 	radioWrite(&radiobuf,sizeof(radiobuf));
+	//myPutStr("Done\r\n");
       }
       // Power the radio down
       PORTA &= ~_BV(PINA1);
